@@ -2,8 +2,10 @@
 #include <stdio.h>
 #include <string>
 #include <iostream>
+#include "fstream"
 #include "array"
 #include "queue"
+#include <algorithm>
 //你要完成的功能总入口
 
 struct Edge
@@ -25,6 +27,22 @@ void addEdge(int s, int t, int flow);
 int dinic(int startnode, int endnode);
 int dfs(int startnode, int maxflow, int endnode);
 
+struct Info
+{
+	int con_point, source_point;
+	double flow;
+};
+
+bool isBigger(const Info &info1, const Info &info2) 
+{
+	return info1.flow > info2.flow;
+}
+
+bool isLonger(const std::vector<Info> vector1, const std::vector<Info> vector2) 
+{
+	return vector1.size() < vector2.size();
+}
+
 
 void deploy_server(char * topo[MAX_EDGE_NUM], int line_num,char * filename)
 {
@@ -36,12 +54,11 @@ void deploy_server(char * topo[MAX_EDGE_NUM], int line_num,char * filename)
 	int server_cost = std::stoi(topo[2]);
 	int **adjacent_table = new int*[network_node_number];
 	int **value_table = new int*[network_node_number];
-	int **consume_table = new int*[network_node_number];
+	int **consume_table = new int*[consume_node_number];
 
 	for (int i = 0; i != network_node_number; ++i) {
 		adjacent_table[i] = new int[network_node_number];
 		value_table[i] = new int[network_node_number];
-		consume_table[i] = new int[2];
 		memset(adjacent_table[i], 0, network_node_number * sizeof(int));
 		memset(value_table[i], 0, network_node_number * sizeof(int));
 	}
@@ -61,8 +78,9 @@ void deploy_server(char * topo[MAX_EDGE_NUM], int line_num,char * filename)
 	std::cout << value_table[47][48] << std::endl;
 	std::cout << value_table[3][7] << std::endl;
 
-	// read consume node
+	 //read consume node
 	for (int i = 0; i != consume_node_number; ++i) {
+		consume_table[i] = new int[2];
 		int consume_node = std::stoi(strtok(topo[i + network_edge_number + 5], delim));
 		int adjacent_node = std::stoi(strtok(NULL, delim));
 		int need_number = std::stoi(strtok(NULL, delim));
@@ -70,14 +88,72 @@ void deploy_server(char * topo[MAX_EDGE_NUM], int line_num,char * filename)
 		consume_table[consume_node][1] = need_number;
 	}
 
+	for (int i = 0; i != consume_node_number; ++i) 
+	{
+		std::cout << consume_table[i][0] << "===" << consume_table[i][1] << std::endl;
+	}
+
+
 	level = new int[network_node_number];
 	edge = new Edge[2 * network_edge_number];
 	head = new int[network_node_number];
-	memset(head, -1, network_node_number * sizeof(int));
-	count = 0;
+
+	std::vector<std::vector<Info>> info_vector;
+	info_vector.clear();
+
+	for (int i = 0; i < consume_node_number; i++) 
+	{
+		std::vector<Info> node_vector; node_vector.clear();
+		info_vector.push_back(node_vector);
+	}
+
+	std::ofstream wf;
+	wf.open("F:/SDK-gcc/testdata/liuliang.csv");
+	for (int i = 0; i < consume_node_number; i++)
+	{
+		for (int j = 0; j < network_node_number; j++)
+		{
+			if (consume_table[i][0] == j)
+			{
+				continue;
+			}
+			initGraph(adjacent_table, network_node_number);
+			double liuliang = 0;
+			liuliang = dinic(j, consume_table[i][0]);
+			if (liuliang >= consume_table[i][1]) 
+			{
+				Info info = { consume_table[i][0], j, liuliang };
+				info_vector[i].push_back(info);
+				wf << j << ',' << consume_table[i][0] << ',' << liuliang << '\r';
+			}
+		}
+	}
+	wf.close();
+
+	for (int i = 0; i < info_vector.size(); i++) 
+	{
+		std::sort(info_vector[i].begin(), info_vector[i].end(), isBigger);
+	}
+
+	std::sort(info_vector.begin(), info_vector.end(), isLonger);
+
+	wf.open("F:/SDK-gcc/testdata/seliuliang.csv");
+	for (int i = 0; i < info_vector.size(); i++)
+	{
+		for (int j = 0; j < info_vector[i].size(); j++) 
+		{
+			wf << info_vector[i][j].source_point << ',' <<
+				info_vector[i][j].con_point << ',' <<
+				info_vector[i][j].flow << '\r';
+		}
+	}
+	wf.close();
+
 	initGraph(adjacent_table, network_node_number);
 
-	std::cout << dinic(0, 26) << std::endl;
+
+
+	std::cout << dinic(0, 0) << std::endl;
 	
 	// 需要输出的内容
 	char * topo_file = (char *)"17\n\n0 8 0 20\n21 8 0 20\n9 11 1 13\n21 22 2 20\n23 22 2 8\n1 3 3 11\n24 3 3 17\n27 3 3 26\n24 3 3 10\n18 17 4 11\n1 19 5 26\n1 16 6 15\n15 13 7 13\n4 5 8 18\n2 25 9 15\n0 7 10 10\n23 24 11 23";
@@ -89,6 +165,9 @@ void deploy_server(char * topo[MAX_EDGE_NUM], int line_num,char * filename)
 
 void initGraph(int **adj_table,int nodeCount) 
 {
+	memset(head, -1, network_node_number * sizeof(int));
+	memset(edge, -1, 2 * network_node_number * sizeof(int));
+	count = 0;
 	for (int i = 0; i<nodeCount; i++)
 	{
 		for (int j = 0; j<nodeCount; j++)
@@ -112,13 +191,14 @@ void addEdge(int s,int t,int flow)
 	//反向边
 	edge[count].s = t;
 	edge[count].t = s;
-	edge[count].flow = 0;
+	edge[count].flow = flow;
 	edge[count].next = head[t];
 	head[t] = count++;
 }
 
 bool bfs(int startnode,int endnode) 
 {
+	if (startnode == endnode) { return false; }
 	std::queue<int> mqueue;
 	while (!mqueue.empty())
 		mqueue.pop();
